@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MATA DIGITAL MISSION: Selamatkan Negara Bangsa</title>
+  
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Tailwind CSS & Canvas Confetti -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <!-- MediaPipe Hands & Camera Utils CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            orbitron: ['Orbitron', 'sans-serif'],
+            rajdhani: ['Rajdhani', 'sans-serif'],
+          },
+          colors: {
+            mata: {
+              bg: '#030816',
+              card: 'rgba(6, 20, 48, 0.75)',
+              cyan: '#00f0ff',
+              blue: '#0066ff',
+              green: '#00ff66',
+              red: '#ff0055',
+              gold: '#ffcc00',
+              border: 'rgba(0, 240, 255, 0.3)'
+            }
+          },
+          boxShadow: {
+            glowCyan: '0 0 20px rgba(0, 240, 255, 0.5)',
+            glowGreen: '0 0 20px rgba(0, ff, 102, 0.6)',
+            glowRed: '0 0 20px rgba(255, 0, 85, 0.6)',
+            glowGold: '0 0 25px rgba(255, 204, 0, 0.7)'
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Hologram Grid & Radar Animations */
+    body {
+      background-color: #030816;
+      color: #e2e8f0;
+      font-family: 'Rajdhani', sans-serif;
+      overflow-x: hidden;
+    }
+    .grid-bg {
+      background-image: 
+        linear-gradient(to right, rgba(0, 240, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 240, 255, 0.05) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    .scan-line {
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 4px;
+      background: linear-gradient(90deg, transparent, #00f0ff, transparent);
+      opacity: 0.7;
+      animation: scan 4s linear infinite;
+    }
+    @keyframes scan {
+      0% { top: 0%; }
+      100% { top: 100%; }
+    }
+    .hologram-card {
+      background: rgba(6, 20, 48, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+    }
+    .radar-sweep {
+      animation: spin 6s linear infinite;
+    }
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+    /* Cursor Smoothness */
+    #hand-cursor {
+      transition: transform 0.05s ease-out;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="grid-bg min-h-screen relative flex flex-col justify-between select-none">
+
+  <!-- Visual Hologram Overlay Lines -->
+  <div class="scan-line pointer-events-none z-50"></div>
+  <div class="fixed inset-0 bg-radial-vignette pointer-events-none z-40 opacity-40"></div>
+
+  <!-- TOP HEADER HUD -->
+  <header class="w-full bg-slate-950/80 border-b border-mata-cyan/30 px-4 py-3 z-30 flex justify-between items-center backdrop-blur-md">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full border border-mata-cyan flex items-center justify-center bg-mata-cyan/10 text-mata-cyan shadow-glowCyan">
+        <i class="fa-solid fa-shield-halved text-xl"></i>
+      </div>
+      <div>
+        <h1 class="font-orbitron font-bold text-lg md:text-xl text-white tracking-wider flex items-center gap-2">
+          MATA DIGITAL MISSION <span class="text-xs text-mata-cyan px-2 py-0.5 rounded bg-mata-cyan/20 border border-mata-cyan">v2.5</span>
+        </h1>
+        <p class="text-xs text-slate-400">Pusat Operasi Keselamatan Siber & Negara Bangsa</p>
+      </div>
+    </div>
+
+    <!-- HUD Metrics -->
+    <div class="flex items-center gap-4 md:gap-8 font-orbitron">
+      <!-- Camera Status Indicator -->
+      <div class="flex items-center gap-2 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-700">
+        <span id="cam-status-dot" class="w-3 h-3 rounded-full bg-red-500"></span>
+        <span id="cam-status-text" class="text-xs font-semibold text-red-400">KAMERA: OFFLINE</span>
+      </div>
+
+      <!-- High Score HUD -->
+      <div class="hidden sm:flex flex-col items-end">
+        <span class="text-[10px] text-slate-400 tracking-widest">SKOR TERTINGGI</span>
+        <span id="hud-high-score" class="text-mata-gold font-bold text-sm md:text-base">0 PTS</span>
+      </div>
+
+      <!-- Audio & Fullscreen Buttons -->
+      <div class="flex items-center gap-2">
+        <button id="btn-audio" onclick="toggleAudio()" class="p-2 rounded-lg border border-slate-700 bg-slate-900 hover:border-mata-cyan text-slate-300 hover:text-mata-cyan transition">
+          <i id="audio-icon" class="fa-solid fa-volume-xmark"></i>
+        </button>
+        <button id="btn-fullscreen" onclick="toggleFullscreen()" class="p-2 rounded-lg border border-slate-700 bg-slate-900 hover:border-mata-cyan text-slate-300 hover:text-mata-cyan transition">
+          <i class="fa-solid fa-expand"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER FOR SCREENS -->
+  <main class="w-full max-w-7xl mx-auto p-4 md:p-6 flex-grow flex items-center justify-center relative z-20">
+
+    <!-- ================= SKRIN 1: MISSION START ================= -->
+    <section id="screen-start" class="w-full flex flex-col items-center text-center space-y-6">
+      <div class="relative mb-2">
+        <!-- Radar Animation -->
+        <div class="w-36 h-36 md:w-48 md:h-48 rounded-full border-2 border-mata-cyan/30 relative flex items-center justify-center bg-mata-cyan/5">
+          <div class="absolute inset-0 rounded-full border border-mata-cyan/20"></div>
+          <div class="w-full h-1/2 bg-gradient-to-t from-mata-cyan/20 to-transparent absolute top-0 rounded-t-full origin-bottom radar-sweep"></div>
+          <i class="fa-solid fa-brain text-5xl md:text-6xl text-mata-cyan shadow-glowCyan animate-pulse"></i>
+        </div>
+      </div>
+
+      <div class="max-w-2xl">
+        <h2 class="font-orbitron text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-mata-cyan to-blue-500 uppercase tracking-wide">
+          Selamatkan Negara Bangsa
+        </h2>
+        <p class="text-mata-cyan font-semibold text-lg md:text-xl mt-2 italic">
+          “Uji minda, kawal dengan tangan, bina Malaysia yang bersatu.”
+        </p>
+        <p class="text-slate-400 text-sm md:text-base mt-4">
+          Aspirasi Pembentukan Negara Bangsa berasaskan etika digital, perpaduan sosial, dan pembangunan teknologi secara inklusif.
+        </p>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex flex-col sm:flex-row gap-4 w-full max-w-md pt-4">
+        <button onclick="requestCameraAccess()" class="flex-1 py-3 px-6 rounded-xl border border-mata-cyan bg-mata-cyan/20 hover:bg-mata-cyan/30 text-mata-cyan font-orbitron font-bold flex items-center justify-center gap-2 transition shadow-glowCyan">
+          <i class="fa-solid fa-video"></i> AKTIFKAN KAMERA
+        </button>
+        <button onclick="goToScreen('screen-tutorial')" class="flex-1 py-3 px-6 rounded-xl border border-slate-600 bg-slate-900/90 hover:border-mata-cyan text-white font-orbitron font-bold flex items-center justify-center gap-2 transition">
+          <i class="fa-solid fa-hand"></i> CARA BERMAIN
+        </button>
+      </div>
+
+      <button onclick="startMission()" class="w-full max-w-md py-4 rounded-xl bg-gradient-to-r from-mata-cyan to-blue-600 text-slate-950 font-orbitron font-black text-xl tracking-wider hover:brightness-125 transition shadow-glowCyan">
+        <i class="fa-solid fa-play mr-2"></i> MULA MISI
+      </button>
+    </section>
+
+    <!-- ================= SKRIN 2: TUTORIAL KAWALAN TANGAN ================= -->
+    <section id="screen-tutorial" class="w-full max-w-4xl hologram-card rounded-2xl p-6 md:p-8 hidden flex-col">
+      <h2 class="font-orbitron text-2xl md:text-3xl font-bold text-mata-cyan mb-2 flex items-center gap-3">
+        <i class="fa-solid fa-hand-sparkles"></i> LATIHAN KAWALAN GESTURE TANGAN
+      </h2>
+      <p class="text-slate-300 text-sm mb-6">MediaPipe Hands mengesan landmark tangan anda secara langsung melalui kamera web.</p>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60 flex flex-col items-center text-center">
+          <div class="w-14 h-14 rounded-full bg-mata-cyan/10 border border-mata-cyan flex items-center justify-center text-mata-cyan text-2xl mb-3">
+            <i class="fa-solid fa-hand"></i>
+          </div>
+          <h3 class="font-orbitron font-bold text-white mb-1">Gesture A: Tapak Terbuka</h3>
+          <p class="text-xs text-slate-400">Gerakkan tapak tangan untuk mengawal cursor di atas skrin dan menyorot pilihan jawapan.</p>
+        </div>
+
+        <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60 flex flex-col items-center text-center">
+          <div class="w-14 h-14 rounded-full bg-mata-green/10 border border-mata-green flex items-center justify-center text-mata-green text-2xl mb-3">
+            <i class="fa-solid fa-hand-back-fist"></i>
+          </div>
+          <h3 class="font-orbitron font-bold text-white mb-1">Gesture B: Cubitan / Pinch</h3>
+          <p class="text-xs text-slate-400">Rapatkan ibu jari & jari telunjuk di atas kad jawapan untuk membuat pengesahan pilihan.</p>
+        </div>
+
+        <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60 flex flex-col items-center text-center">
+          <div class="w-14 h-14 rounded-full bg-mata-gold/10 border border-mata-gold flex items-center justify-center text-mata-gold text-2xl mb-3">
+            <i class="fa-solid fa-thumbs-up"></i>
+          </div>
+          <h3 class="font-orbitron font-bold text-white mb-1">Gesture C: Thumbs Up</h3>
+          <p class="text-xs text-slate-400">Angkat ibu jari ke atas selepas penerangan soalan untuk meneruskan ke soalan berikutnya.</p>
+        </div>
+      </div>
+
+      <!-- Gesture Test Live Feedback Box -->
+      <div class="bg-slate-950 p-4 rounded-xl border border-mata-cyan/40 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-4 h-4 rounded-full bg-mata-cyan animate-ping"></div>
+          <div>
+            <span class="text-xs text-slate-400 uppercase tracking-widest block">Status Pengesan Semasa</span>
+            <span id="tutorial-gesture-detect" class="font-orbitron font-bold text-mata-cyan text-lg">MENUNGGU TANGAN...</span>
+          </div>
+        </div>
+        <span class="text-xs text-slate-400 italic bg-slate-900 px-3 py-1.5 rounded border border-slate-800">
+          Nota: Kawalan Tetikus & Sentuhan sentiasa aktif sebagai kawalan alternatif.
+        </span>
+      </div>
+
+      <div class="flex justify-between items-center pt-2">
+        <button onclick="goToScreen('screen-start')" class="px-6 py-2.5 rounded-lg border border-slate-700 text-slate-300 font-bold hover:bg-slate-800 transition">
+          KEMBALI
+        </button>
+        <button onclick="goToScreen('screen-briefing')" class="px-8 py-3 rounded-lg bg-mata-cyan text-slate-950 font-orbitron font-bold hover:brightness-110 transition shadow-glowCyan">
+          TERUSKAN KE BRIEFING <i class="fa-solid fa-arrow-right ml-2"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- ================= SKRIN 3: MISSION BRIEFING ================= -->
+    <section id="screen-briefing" class="w-full max-w-4xl hologram-card rounded-2xl p-6 md:p-8 hidden flex-col">
+      <div class="border-b border-mata-cyan/30 pb-4 mb-6">
+        <h2 class="font-orbitron text-2xl md:text-3xl font-black text-white flex items-center gap-3">
+          <i class="fa-solid fa-file-contract text-mata-cyan"></i> TAKLIMAT MISI: EJEN DIGITAL
+        </h2>
+        <p class="text-slate-300 mt-2 text-sm md:text-base">
+          “Jawab 12 soalan berkaitan pengaruh dan kesan teknologi terhadap pembentukan negara bangsa Malaysia. Setiap jawapan yang tepat akan menambah skor dan membawa anda lebih dekat kepada status Ejen Digital Elit.”
+        </p>
+      </div>
+
+      <!-- 6 Sectors List -->
+      <h3 class="font-orbitron font-bold text-mata-cyan text-sm tracking-wider uppercase mb-3">6 Sektor Pembentukan Negara Bangsa:</h3>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+        <div class="bg-slate-900/90 p-3 rounded-lg border border-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-users text-mata-cyan"></i> <span class="text-xs md:text-sm font-semibold">1. Perpaduan Sosial</span>
+        </div>
+        <div class="bg-slate-900/90 p-3 rounded-lg border border-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-graduation-cap text-mata-cyan"></i> <span class="text-xs md:text-sm font-semibold">2. Pendidikan Digital</span>
+        </div>
+        <div class="bg-slate-900/90 p-3 rounded-lg border border-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-chart-line text-mata-cyan"></i> <span class="text-xs md:text-sm font-semibold">3. Pembangunan Ekonomi</span>
+        </div>
+        <div class="bg-slate-900/90 p-3 rounded-lg border border-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-flag text-mata-cyan"></i> <span class="text-xs md:text-sm font-semibold">4. Identiti & Budaya</span>
+        </div>
+        <div class="bg-slate-900/90 p-3 rounded-lg border border-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-landmark text-mata-cyan"></i> <span class="text-xs md:text-sm font-semibold">5. Penyertaan & Tadbir Urus</span>
+        </div>
+        <div class="bg-slate-900/90 p-3 rounded-lg border border-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-scale-balanced text-mata-cyan"></i> <span class="text-xs md:text-sm font-semibold">6. Maruah & Etika</span>
+        </div>
+      </div>
+
+      <!-- Rules Summary -->
+      <div class="bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-xs text-slate-300 space-y-1 mb-6 font-mono">
+        <p><i class="fa-solid fa-check text-mata-green mr-2"></i> PERATURAN: 12 Soalan Total | 20 Saat Setiap Soalan</p>
+        <p><i class="fa-solid fa-check text-mata-green mr-2"></i> PEMARKAHAN: Jawapan Betul = 100 Mata | Jawapan Salah / Tamat Masa = 0 Mata</p>
+      </div>
+
+      <div class="flex justify-between items-center">
+        <button onclick="goToScreen('screen-start')" class="px-6 py-2.5 rounded-lg border border-slate-700 text-slate-300 font-bold hover:bg-slate-800 transition">
+          BATA
+        </button>
+        <button onclick="startQuizGameplay()" class="px-8 py-3 rounded-xl bg-gradient-to-r from-mata-green to-emerald-600 text-slate-950 font-orbitron font-black text-lg tracking-wider hover:brightness-110 transition shadow-glowGreen">
+          MULA CABARAN <i class="fa-solid fa-bolt ml-2"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- ================= SKRIN 4: GAMEPLAY MAIN HUD ================= -->
+    <section id="screen-gameplay" class="w-full max-w-5xl flex flex-col hidden space-y-4">
+      
+      <!-- Top Status HUD Bar -->
+      <div class="hologram-card rounded-xl p-4 flex flex-wrap justify-between items-center gap-4">
+        <div>
+          <span id="game-sector-badge" class="text-xs font-orbitron font-bold text-mata-cyan tracking-wider uppercase block">
+            SEKTOR 1: PERPADUAN SOSIAL
+          </span>
+          <span id="game-question-num" class="text-lg font-orbitron font-black text-white">
+            SOALAN 01 / 12
+          </span>
+        </div>
+
+        <!-- Mission Progress Bar -->
+        <div class="flex-1 max-w-xs mx-4 hidden sm:block">
+          <div class="flex justify-between text-[10px] text-slate-400 mb-1 font-mono">
+            <span>KEMAJUAN MISI</span>
+            <span id="game-progress-text">8%</span>
+          </div>
+          <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
+            <div id="game-progress-bar" class="h-full bg-gradient-to-r from-mata-cyan to-mata-green w-1/12 transition-all duration-300"></div>
+          </div>
+        </div>
+
+        <!-- Timer & Score HUD -->
+        <div class="flex items-center gap-6">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-clock text-mata-gold text-lg animate-pulse"></i>
+            <span id="game-timer" class="font-orbitron font-bold text-2xl text-mata-gold">20s</span>
+          </div>
+          <div class="bg-slate-900 px-4 py-1.5 rounded-lg border border-mata-cyan/40 text-right">
+            <span class="text-[10px] text-slate-400 block tracking-widest">SKOR</span>
+            <span id="game-score" class="font-orbitron font-black text-xl text-mata-cyan">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Question Card -->
+      <div class="hologram-card rounded-2xl p-6 relative overflow-hidden">
+        <h3 id="game-question-text" class="text-xl md:text-2xl font-bold text-white leading-relaxed mb-6">
+          Soalan akan dipaparkan di sini...
+        </h3>
+
+        <!-- 4 Answer Option Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="answers-container">
+          <!-- JS dynamic answer cards will render here -->
+        </div>
+      </div>
+
+      <!-- Feedback Explanation Panel (Appears after answer) -->
+      <div id="feedback-panel" class="hologram-card rounded-xl p-5 border-l-4 border-mata-cyan hidden animate-fade-in">
+        <div class="flex items-start gap-4">
+          <div id="feedback-icon-bg" class="w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0">
+            <i id="feedback-icon" class="fa-solid"></i>
+          </div>
+          <div class="flex-1">
+            <h4 id="feedback-title" class="font-orbitron font-bold text-lg mb-1"></h4>
+            <p id="feedback-explanation" class="text-slate-300 text-sm leading-relaxed mb-3"></p>
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-slate-400 font-mono">Gunakan Gesture Thumbs Up <i class="fa-solid fa-thumbs-up text-mata-gold ml-1"></i> atau tekan butang</span>
+              <button onclick="nextQuestion()" class="px-6 py-2 rounded-lg bg-mata-cyan text-slate-950 font-orbitron font-bold text-sm hover:brightness-110 transition shadow-glowCyan">
+                SETERUSNYA <i class="fa-solid fa-chevron-right ml-1"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ================= SKRIN 5: BONUS ROUND ================= -->
+    <section id="screen-bonus" class="w-full max-w-3xl hologram-card rounded-2xl p-6 md:p-8 hidden flex-col">
+      <div class="text-center mb-6">
+        <span class="px-3 py-1 rounded-full bg-mata-gold/20 border border-mata-gold text-mata-gold font-orbitron font-bold text-xs tracking-widest uppercase mb-2 inline-block">
+          PUSINGAN BONUS TERAKHIR
+        </span>
+        <h2 class="font-orbitron text-2xl md:text-4xl font-black text-white mt-1">
+          FINAL DECISION: SELAMATKAN KOMUNITI DIGITAL
+        </h2>
+      </div>
+
+      <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 mb-6">
+        <h3 class="font-orbitron text-mata-cyan font-bold mb-2">SITUASI AMARAN KRITIKAL:</h3>
+        <p class="text-slate-300 text-sm md:text-base leading-relaxed">
+          Satu klip audio AI deepfake suara tokoh negara disebarkan di platform media sosial untuk mencetuskan panik awam dan ketegangan politik. Sebagai Ejen MATA Digital, apakah tindakan beretika terbaik anda?
+        </p>
+      </div>
+
+      <div class="space-y-3 mb-6">
+        <button onclick="selectBonusOption(0)" class="w-full p-4 rounded-xl border border-slate-700 bg-slate-900/80 hover:border-mata-cyan text-left font-semibold text-sm md:text-base transition flex items-center gap-3">
+          <span class="w-8 h-8 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center font-orbitron text-mata-cyan">A</span>
+          <span>Sebarkan klip audio tersebut ke semua kumpulan media sosial untuk memberi amaran.</span>
+        </button>
+        <button onclick="selectBonusOption(1)" class="w-full p-4 rounded-xl border border-slate-700 bg-slate-900/80 hover:border-mata-cyan text-left font-semibold text-sm md:text-base transition flex items-center gap-3">
+          <span class="w-8 h-8 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center font-orbitron text-mata-cyan">B</span>
+          <span>Laporkan hantaran tersebut kepada pihak berkuasa MCMC / platform dan buat penjelasan berasaskan fakta rasmi.</span>
+        </button>
+      </div>
+
+      <div id="bonus-result" class="hidden p-4 rounded-xl bg-slate-900 border border-mata-green text-center">
+        <span class="text-mata-green font-orbitron font-bold text-lg block mb-1">TINDAKAN TEPAT! +200 MARKAH BONUS</span>
+        <p class="text-xs text-slate-300">Respons beretika dan saluran rasmi menghalang manipulasi persepsi digital.</p>
+        <button onclick="goToScreen('screen-results')" class="mt-4 px-8 py-2.5 rounded-lg bg-mata-green text-slate-950 font-orbitron font-bold text-sm">
+          LIHAT KEPUTUSAN MISI
+        </button>
+      </div>
+    </section>
+
+    <!-- ================= SKRIN 6: MISSION COMPLETE ================= -->
+    <section id="screen-results" class="w-full max-w-4xl hologram-card rounded-2xl p-6 md:p-8 hidden flex-col">
+      <div class="text-center mb-6">
+        <span class="text-xs font-orbitron font-bold text-mata-cyan tracking-widest uppercase">LAPORAN PRESTASI MISI</span>
+        <h2 id="result-rank-title" class="font-orbitron text-3xl md:text-5xl font-black text-mata-gold mt-1 shadow-glowGold">
+          EJEN DIGITAL ELIT
+        </h2>
+      </div>
+
+      <!-- Overview Stats Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div class="bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-center">
+          <span class="text-[10px] text-slate-400 block font-mono">JUMLAH SKOR</span>
+          <span id="res-score" class="font-orbitron font-black text-2xl text-mata-cyan">0</span>
+        </div>
+        <div class="bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-center">
+          <span class="text-[10px] text-slate-400 block font-mono">PERATUSAN</span>
+          <span id="res-percent" class="font-orbitron font-black text-2xl text-mata-green">0%</span>
+        </div>
+        <div class="bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-center">
+          <span class="text-[10px] text-slate-400 block font-mono">JAWAPAN BETUL</span>
+          <span id="res-correct" class="font-orbitron font-black text-2xl text-white">0 / 12</span>
+        </div>
+        <div class="bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-center">
+          <span class="text-[10px] text-slate-400 block font-mono">MARKAH BONUS</span>
+          <span id="res-bonus" class="font-orbitron font-black text-2xl text-mata-gold">+0</span>
+        </div>
+      </div>
+
+      <!-- Sector Breakdown -->
+      <h3 class="font-orbitron font-bold text-xs text-slate-400 uppercase tracking-wider mb-3">Analisis 6 Sektor Misi:</h3>
+      <div id="sector-analysis-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+        <!-- Javascript renders sector breakdowns -->
+      </div>
+
+      <!-- Action Footer -->
+      <div class="flex flex-wrap gap-3 justify-center pt-2">
+        <button onclick="restartGame()" class="px-6 py-3 rounded-xl bg-mata-cyan text-slate-950 font-orbitron font-bold text-sm hover:brightness-110 transition shadow-glowCyan">
+          <i class="fa-solid fa-rotate-right mr-1"></i> MAIN SEMULA
+        </button>
+        <button onclick="goToScreen('screen-start')" class="px-6 py-3 rounded-xl border border-slate-700 text-white font-orbitron font-bold text-sm hover:bg-slate-800 transition">
+          <i class="fa-solid fa-house mr-1"></i> MENU UTAMA
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- WEBCAM & HAND TRACKING OVERLAY CANVAS -->
+  <div class="fixed bottom-4 right-4 z-50 flex flex-col items-end">
+    <div class="relative w-36 h-28 md:w-48 md:h-36 rounded-xl overflow-hidden border-2 border-mata-cyan/60 bg-slate-950 shadow-2xl">
+      <!-- Hidden Video Source -->
+      <video id="webcam-video" class="w-full h-full object-cover transform -scale-x-100" playsinline></video>
+      <!-- Canvas Overlay for Tracking Dots -->
+      <canvas id="tracking-canvas" class="absolute inset-0 w-full h-full transform -scale-x-100"></canvas>
+      <div class="absolute bottom-1 left-2 text-[9px] font-mono text-mata-cyan bg-slate-950/80 px-1 rounded">
+        MATA CAM FEED
+      </div>
+    </div>
+  </div>
+
+  <!-- VISUAL HAND CURSOR FOR OVERLAY CONTROL -->
+  <div id="hand-cursor" class="fixed top-0 left-0 w-8 h-8 rounded-full border-2 border-mata-cyan bg-mata-cyan/30 z-50 flex items-center justify-center shadow-glowCyan hidden">
+    <div class="w-2 h-2 rounded-full bg-white"></div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC & MEDIAPIPE HANDS INTEGRATION -->
+  <script>
+    /* ================= 1. BANK SOALAN (12 SOALAN UTAMA) ================= */
+    const questionBank = [
+      // Sektor 1: Perpaduan Sosial
+      {
+        sectorId: 1,
+        sectorName: "SEKTOR 1: PERPADUAN SOSIAL",
+        question: "Anda menerima video di media sosial yang mendakwa sesuatu kaum menghina kaum lain. Sumber video tidak diketahui. Apakah tindakan paling bertanggungjawab?",
+        options: [
+          "Terus berkongsi supaya semua orang tahu.",
+          "Menambah komen yang menyalahkan kaum tersebut.",
+          "Menyemak sumber dan kesahihan video sebelum membuat kesimpulan atau berkongsi.",
+          "Menghantar video itu ke semua kumpulan WhatsApp."
+        ],
+        correct: 2,
+        explanation: "Semakan fakta membantu mengurangkan penyebaran maklumat palsu, prasangka dan konflik antara masyarakat."
+      },
+      {
+        sectorId: 1,
+        sectorName: "SEKTOR 1: PERPADUAN SOSIAL",
+        question: "Bagaimanakah teknologi dapat membantu pembentukan negara bangsa Malaysia?",
+        options: [
+          "Menggalakkan masyarakat berinteraksi hanya dengan kumpulan sendiri.",
+          "Membolehkan masyarakat berkongsi budaya, bekerjasama dan memahami perbezaan.",
+          "Menghapuskan semua perbezaan budaya.",
+          "Menggantikan semua interaksi bersemuka."
+        ],
+        correct: 1,
+        explanation: "Teknologi boleh menyokong persefahaman dan identiti kebangsaan apabila digunakan secara inklusif dan bertanggungjawab."
+      },
+      // Sektor 2: Pendidikan Digital
+      {
+        sectorId: 2,
+        sectorName: "SEKTOR 2: PENDIDIKAN DIGITAL",
+        question: "Mengapakah jurang digital masih menjadi isu pendidikan walaupun ramai rakyat Malaysia mempunyai akses Internet?",
+        options: [
+          "Semua pelajar belajar dengan cara yang sama.",
+          "Internet tidak boleh digunakan untuk pendidikan.",
+          "Perbezaan peranti, kualiti sambungan dan kemahiran digital boleh mempengaruhi peluang pembelajaran.",
+          "Teknologi menjadikan guru tidak diperlukan."
+        ],
+        correct: 2,
+        explanation: "Akses Internet sahaja tidak menjamin setiap pelajar mempunyai kemudahan dan pengalaman pembelajaran yang sama."
+      },
+      {
+        sectorId: 2,
+        sectorName: "SEKTOR 2: PENDIDIKAN DIGITAL",
+        question: "Seorang pelajar menggunakan AI untuk menyiapkan tugasan. Apakah amalan yang paling beretika?",
+        options: [
+          "Menyerahkan jawapan AI tanpa membacanya.",
+          "Menggunakan AI sebagai bantuan, menyemak fakta dan menghasilkan tugasan berdasarkan pemahaman sendiri.",
+          "Memasukkan maklumat palsu supaya tugasan kelihatan menarik.",
+          "Menganggap semua jawapan AI semestinya tepat."
+        ],
+        correct: 1,
+        explanation: "AI boleh membantu pembelajaran, tetapi pelajar tetap perlu berfikir secara kritis, mengesahkan maklumat dan menjaga integriti akademik."
+      },
+      // Sektor 3: Pembangunan Ekonomi
+      {
+        sectorId: 3,
+        sectorName: "SEKTOR 3: PEMBANGUNAN EKONOMI",
+        question: "Seorang peniaga kecil menggunakan platform e-dagang untuk menjual produk ke seluruh Malaysia. Apakah manfaat utama teknologi dalam situasi ini?",
+        options: [
+          "Mengehadkan pelanggan kepada kawasan tempat tinggal.",
+          "Menghapuskan semua risiko perniagaan.",
+          "Memperluas pasaran dan memudahkan transaksi.",
+          "Menjamin keuntungan tanpa usaha."
+        ],
+        correct: 2,
+        explanation: "Platform digital boleh membantu peniaga menjangkau lebih ramai pelanggan, tetapi kejayaan masih bergantung pada strategi, kos dan kepercayaan pengguna."
+      },
+      {
+        sectorId: 3,
+        sectorName: "SEKTOR 3: PEMBANGUNAN EKONOMI",
+        question: "Anda menerima mesej tawaran kerja dalam talian yang meminta bayaran pendahuluan dan maklumat bank. Apakah tindakan terbaik?",
+        options: [
+          "Membayar dengan segera.",
+          "Memberikan kata laluan dan OTP.",
+          "Menghantar maklumat peribadi untuk mempercepat permohonan.",
+          "Menyemak kesahihan tawaran melalui saluran rasmi dan tidak berkongsi maklumat sensitif."
+        ],
+        correct: 3,
+        explanation: "Penipuan digital boleh menyebabkan kerugian kewangan dan penyalahgunaan identiti. Pengguna perlu mengesahkan tawaran sebelum bertindak."
+      },
+      // Sektor 4: Identiti Nasional dan Budaya
+      {
+        sectorId: 4,
+        sectorName: "SEKTOR 4: IDENTITI NASIONAL DAN BUDAYA",
+        question: "Bagaimanakah media sosial boleh membantu memelihara warisan Malaysia?",
+        options: [
+          "Menyebarkan kandungan budaya tanpa menyemak ketepatannya.",
+          "Mendokumentasikan bahasa, seni, sejarah dan tradisi untuk dikongsi dengan masyarakat.",
+          "Menggantikan semua tradisi dengan budaya popular.",
+          "Menghalang generasi muda mempelajari sejarah."
+        ],
+        correct: 1,
+        explanation: "Platform digital boleh membantu mendokumentasikan dan memperkenalkan warisan negara kepada generasi muda serta masyarakat antarabangsa."
+      },
+      {
+        sectorId: 4,
+        sectorName: "SEKTOR 4: IDENTITI NASIONAL DAN BUDAYA",
+        question: "Anda menemui hantaran yang memberikan maklumat sejarah dan budaya Malaysia yang meragukan. Apakah tindakan terbaik?",
+        options: [
+          "Terus berkongsi kerana hantaran itu popular.",
+          "Menambah fakta yang tidak diketahui.",
+          "Menyemak sumber yang berwibawa dan membandingkan maklumat sebelum berkongsi.",
+          "Menganggap jumlah tanda suka sebagai bukti kebenaran."
+        ],
+        correct: 2,
+        explanation: "Maklumat budaya dan sejarah yang tepat penting untuk memelihara identiti nasional serta mengelakkan salah faham."
+      },
+      // Sektor 5: Penyertaan Rakyat dan Tadbir Urus
+      {
+        sectorId: 5,
+        sectorName: "SEKTOR 5: PENYERTAAN RAKYAT DAN TADBIR URUS",
+        question: "Apakah manfaat portal kerajaan digital kepada rakyat?",
+        options: [
+          "Memudahkan akses kepada maklumat dan perkhidmatan awam.",
+          "Menghapuskan keperluan melindungi data peribadi.",
+          "Menjamin semua maklumat di media sosial adalah benar.",
+          "Membolehkan semua orang mengakses data peribadi rakyat lain."
+        ],
+        correct: 0,
+        explanation: "Perkhidmatan digital boleh meningkatkan kemudahan dan kecekapan urusan awam apabila dibangunkan secara selamat dan inklusif."
+      },
+      {
+        sectorId: 5,
+        sectorName: "SEKTOR 5: PENYERTAAN RAKYAT DAN TADBIR URUS",
+        question: "Anda menerima mesej yang kelihatan seperti pengumuman rasmi kerajaan, tetapi pautannya mencurigakan. Apakah tindakan yang paling sesuai?",
+        options: [
+          "Terus memasukkan nombor kad pengenalan dan maklumat bank.",
+          "Menghantar pautan kepada rakan supaya mereka mencubanya.",
+          "Memuat turun semua fail yang dilampirkan.",
+          "Mengakses saluran rasmi secara berasingan dan menyemak kesahihan pengumuman."
+        ],
+        correct: 3,
+        explanation: "Pengesahan melalui saluran rasmi mengurangkan risiko phishing, penipuan dan penyalahgunaan maklumat peribadi."
+      },
+      // Sektor 6: Maruah, Etika dan Tanggungjawab
+      {
+        sectorId: 6,
+        sectorName: "SEKTOR 6: MARUAH, ETIKA DAN TANGGUNGJAWAB",
+        question: "Seseorang menghasilkan video deepfake menggunakan wajah rakan tanpa kebenaran untuk memalukan individu tersebut. Apakah isu utama dalam situasi ini?",
+        options: [
+          "Peningkatan kelajuan Internet.",
+          "Pelanggaran privasi, maruah dan kemungkinan penyalahgunaan identiti.",
+          "Penambahbaikan kualiti video.",
+          "Penggunaan teknologi yang semestinya bermanfaat."
+        ],
+        correct: 1,
+        explanation: "Teknologi AI perlu digunakan dengan menghormati privasi, maruah dan hak individu."
+      },
+      {
+        sectorId: 6,
+        sectorName: "SEKTOR 6: MARUAH, ETIKA DAN TANGGUNGJAWAB",
+        question: "Apakah prinsip paling penting apabila menggunakan teknologi untuk membina negara bangsa Malaysia?",
+        options: [
+          "Berkongsi maklumat secepat mungkin tanpa menyemaknya.",
+          "Mengutamakan populariti berbanding kebenaran.",
+          "Menggunakan teknologi secara inklusif, beretika dan bertanggungjawab.",
+          "Mengabaikan kesan teknologi terhadap masyarakat."
+        ],
+        correct: 2,
+        explanation: "Teknologi sepatutnya menyokong perpaduan, pendidikan, pembangunan dan kesejahteraan manusia, bukan menjejaskan hak atau keharmonian masyarakat."
+      }
+    ];
+
+    /* ================= 2. GAME STATE VARIABLES ================= */
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let bonusScore = 0;
+    let highScore = localStorage.getItem("mata_high_score") || 0;
+    let userAnswers = []; // Store answer records
+    let timerInterval = null;
+    let timeLeft = 20;
+    let isAnswerLocked = false;
+
+    // Gesture Cooldown & State
+    let lastGestureTime = 0;
+    const GESTURE_COOLDOWN_MS = 1200; // 1.2s delay between gesture actions
+    let activePinch = false;
+
+    // Audio SFX Synthesis (Web Audio API)
+    let audioCtx = null;
+    let soundEnabled = false;
+
+    /* ================= 3. INITIALIZATION & NAVIGATION ================= */
+    window.onload = () => {
+      document.getElementById("hud-high-score").innerText = `${highScore} PTS`;
+      initAudio();
+    };
+
+    function goToScreen(screenId) {
+      const screens = ['screen-start', 'screen-tutorial', 'screen-briefing', 'screen-gameplay', 'screen-bonus', 'screen-results'];
+      screens.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+      });
+      document.getElementById(screenId).classList.remove('hidden');
+    }
+
+    function startMission() {
+      goToScreen('screen-briefing');
+    }
+
+    function startQuizGameplay() {
+      currentQuestionIndex = 0;
+      score = 0;
+      bonusScore = 0;
+      userAnswers = [];
+      goToScreen('screen-gameplay');
+      loadQuestion(currentQuestionIndex);
+    }
+
+    /* ================= 4. QUIZ ENGINE LOGIC ================= */
+    function loadQuestion(index) {
+      isAnswerLocked = false;
+      const q = questionBank[index];
+
+      // Update HUD
+      document.getElementById("game-sector-badge").innerText = q.sectorName;
+      document.getElementById("game-question-num").innerText = `SOALAN ${String(index + 1).padStart(2, '0')} / 12`;
+      document.getElementById("game-score").innerText = score;
+
+      const progress = Math.round(((index) / 12) * 100);
+      document.getElementById("game-progress-text").innerText = `${progress}%`;
+      document.getElementById("game-progress-bar").style.width = `${progress}%`;
+
+      // Set Question Text
+      document.getElementById("game-question-text").innerText = q.question;
+
+      // Hide Feedback Panel
+      document.getElementById("feedback-panel").classList.add("hidden");
+
+      // Render Answer Options
+      const answersContainer = document.getElementById("answers-container");
+      answersContainer.innerHTML = "";
+
+      const labels = ['A', 'B', 'C', 'D'];
+      q.options.forEach((opt, idx) => {
+        const btn = document.createElement("button");
+        btn.className = `answer-card w-full p-4 rounded-xl border border-slate-700 bg-slate-900/80 hover:border-mata-cyan text-left transition flex items-start gap-3 relative overflow-hidden group`;
+        btn.setAttribute("data-index", idx);
+        btn.onclick = () => selectAnswer(idx);
+
+        btn.innerHTML = `
+          <span class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center font-orbitron font-bold text-mata-cyan shrink-0 group-hover:bg-mata-cyan group-hover:text-slate-950 transition">
+            ${labels[idx]}
+          </span>
+          <span class="text-sm md:text-base text-slate-200 font-medium leading-snug pt-1">${opt}</span>
+        `;
+        answersContainer.appendChild(btn);
+      });
+
+      startTimer();
+    }
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      timeLeft = 20;
+      document.getElementById("game-timer").innerText = `${timeLeft}s`;
+
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById("game-timer").innerText = `${timeLeft}s`;
+
+        if (timeLeft <= 0) {
+          clearInterval(timerInterval);
+          handleTimeOut();
+        }
+      }, 1000);
+    }
+
+    function selectAnswer(selectedIndex) {
+      if (isAnswerLocked) return;
+      isAnswerLocked = true;
+      clearInterval(timerInterval);
+
+      const q = questionBank[currentQuestionIndex];
+      const isCorrect = (selectedIndex === q.correct);
+      
+      if (isCorrect) {
+        score += 100;
+        playSFX('correct');
+      } else {
+        playSFX('wrong');
+      }
+
+      userAnswers.push({
+        questionIndex: currentQuestionIndex,
+        selected: selectedIndex,
+        correct: q.correct,
+        isCorrect: isCorrect
+      });
+
+      document.getElementById("game-score").innerText = score;
+
+      // Highlight Answer UI Cards
+      const cards = document.querySelectorAll(".answer-card");
+      cards.forEach((card, idx) => {
+        card.disabled = true;
+        if (idx === q.correct) {
+          card.classList.remove("border-slate-700", "bg-slate-900/80");
+          card.classList.add("border-mata-green", "bg-mata-green/20", "shadow-glowGreen");
+        } else if (idx === selectedIndex && !isCorrect) {
+          card.classList.remove("border-slate-700", "bg-slate-900/80");
+          card.classList.add("border-mata-red", "bg-mata-red/20", "shadow-glowRed");
+        }
+      });
+
+      // Show Feedback Panel
+      showFeedback(isCorrect, q.options[q.correct], q.explanation);
+    }
+
+    function handleTimeOut() {
+      if (isAnswerLocked) return;
+      isAnswerLocked = true;
+
+      const q = questionBank[currentQuestionIndex];
+      playSFX('wrong');
+
+      userAnswers.push({
+        questionIndex: currentQuestionIndex,
+        selected: -1,
+        correct: q.correct,
+        isCorrect: false
+      });
+
+      const cards = document.querySelectorAll(".answer-card");
+      cards.forEach((card, idx) => {
+        card.disabled = true;
+        if (idx === q.correct) {
+          card.classList.add("border-mata-green", "bg-mata-green/20");
+        }
+      });
+
+      showFeedback(false, q.options[q.correct], "MASA TAMAT! " + q.explanation);
+    }
+
+    function showFeedback(isCorrect, correctAnswerText, explanation) {
+      const panel = document.getElementById("feedback-panel");
+      const title = document.getElementById("feedback-title");
+      const exp = document.getElementById("feedback-explanation");
+      const icon = document.getElementById("feedback-icon");
+      const iconBg = document.getElementById("feedback-icon-bg");
+
+      panel.classList.remove("hidden");
+
+      if (isCorrect) {
+        title.innerText = "RESPONS TEPAT! (+100 PTS)";
+        title.className = "font-orbitron font-bold text-lg text-mata-green mb-1";
+        icon.className = "fa-solid fa-check text-slate-950";
+        iconBg.className = "w-10 h-10 rounded-full bg-mata-green flex items-center justify-center text-xl shrink-0 shadow-glowGreen";
+      } else {
+        title.innerText = "KURANG TEPAT";
+        title.className = "font-orbitron font-bold text-lg text-mata-red mb-1";
+        icon.className = "fa-solid fa-xmark text-white";
+        iconBg.className = "w-10 h-10 rounded-full bg-mata-red flex items-center justify-center text-xl shrink-0 shadow-glowRed";
+      }
+
+      exp.innerText = explanation;
+    }
+
+    function nextQuestion() {
+      currentQuestionIndex++;
+      if (currentQuestionIndex < questionBank.length) {
+        loadQuestion(currentQuestionIndex);
+      } else {
+        // Quiz complete -> Go to Bonus Round
+        goToScreen('screen-bonus');
+      }
+    }
+
+    function selectBonusOption(idx) {
+      if (idx === 1) {
+        bonusScore = 200;
+        playSFX('correct');
+      } else {
+        bonusScore = 0;
+        playSFX('wrong');
+      }
+      document.getElementById("bonus-result").classList.remove("hidden");
+    }
+
+    /* ================= 5. MISSION RESULTS & SECTOR ANALYSIS ================= */
+    function renderResults() {
+      const totalScore = score + bonusScore;
+      const correctCount = userAnswers.filter(a => a.isCorrect).length;
+      const percentage = Math.round((score / 1200) * 100);
+
+      document.getElementById("res-score").innerText = totalScore;
+      document.getElementById("res-percent").innerText = `${percentage}%`;
+      document.getElementById("res-correct").innerText = `${correctCount} / 12`;
+      document.getElementById("res-bonus").innerText = `+${bonusScore}`;
+
+      // Calculate Rank Title
+      const rankEl = document.getElementById("result-rank-title");
+      if (percentage >= 90) {
+        rankEl.innerText = "EJEN DIGITAL ELIT";
+        rankEl.className = "font-orbitron text-3xl md:text-5xl font-black text-mata-gold mt-1 shadow-glowGold";
+      } else if (percentage >= 75) {
+        rankEl.innerText = "EJEN DIGITAL CEMERLANG";
+        rankEl.className = "font-orbitron text-3xl md:text-5xl font-black text-mata-cyan mt-1 shadow-glowCyan";
+      } else if (percentage >= 50) {
+        rankEl.innerText = "EJEN DIGITAL BERKEMBANG";
+        rankEl.className = "font-orbitron text-3xl md:text-5xl font-black text-white mt-1";
+      } else {
+        rankEl.innerText = "LATIHAN SEMULA DIPERLUKAN";
+        rankEl.className = "font-orbitron text-3xl md:text-5xl font-black text-mata-red mt-1 shadow-glowRed";
+      }
+
+      // Update High Score
+      if (totalScore > highScore) {
+        highScore = totalScore;
+        localStorage.setItem("mata_high_score", highScore);
+        document.getElementById("hud-high-score").innerText = `${highScore} PTS`;
+      }
+
+      // Render 6 Sector Breakdowns
+      const sectorGrid = document.getElementById("sector-analysis-grid");
+      sectorGrid.innerHTML = "";
+
+      const sectorNames = [
+        "1. Perpaduan Sosial",
+        "2. Pendidikan Digital",
+        "3. Pembangunan Ekonomi",
+        "4. Identiti Nasional & Budaya",
+        "5. Penyertaan & Tadbir Urus",
+        "6. Maruah & Etika"
+      ];
+
+      for (let s = 1; s <= 6; s++) {
+        const sectorAns = userAnswers.filter((a, idx) => questionBank[idx].sectorId === s);
+        const secCorrect = sectorAns.filter(a => a.isCorrect).length;
+
+        const secDiv = document.createElement("div");
+        secDiv.className = "bg-slate-950/80 p-3 rounded-xl border border-slate-800 flex items-center justify-between";
+        secDiv.innerHTML = `
+          <span class="text-xs font-semibold text-slate-300">${sectorNames[s-1]}</span>
+          <span class="font-orbitron text-xs font-bold ${secCorrect === 2 ? 'text-mata-green' : secCorrect === 1 ? 'text-mata-gold' : 'text-mata-red'}">
+            ${secCorrect} / 2 BETUL
+          </span>
+        `;
+        sectorGrid.appendChild(secDiv);
+      }
+
+      // Launch Confetti if Score High
+      if (percentage >= 75 && typeof confetti === 'function') {
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      }
+    }
+
+    function restartGame() {
+      startQuizGameplay();
+    }
+
+    /* Screen Transition Override for Results */
+    const originalGoToScreen = goToScreen;
+    goToScreen = function(screenId) {
+      originalGoToScreen(screenId);
+      if (screenId === 'screen-results') {
+        renderResults();
+      }
+    };
+
+    /* ================= 6. MEDIAPIPE HAND TRACKING ENGINE ================= */
+    const videoElement = document.getElementById('webcam-video');
+    const canvasElement = document.getElementById('tracking-canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const handCursor = document.getElementById('hand-cursor');
+
+    let hands = null;
+    let camera = null;
+
+    function requestCameraAccess() {
+      const statusDot = document.getElementById("cam-status-dot");
+      const statusText = document.getElementById("cam-status-text");
+
+      statusText.innerText = "KAMERA: CONNECTING...";
+      statusDot.className = "w-3 h-3 rounded-full bg-yellow-500 animate-pulse";
+
+      // Init MediaPipe Hands
+      hands = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+      });
+
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.65,
+        minTrackingConfidence: 0.65
+      });
+
+      hands.onResults(onHandResults);
+
+      // Camera Utils Init
+      camera = new Camera(videoElement, {
+        onFrame: async () => {
+          await hands.send({ image: videoElement });
+        },
+        width: 640,
+        height: 480
+      });
+
+      camera.start()
+        .then(() => {
+          statusText.innerText = "KAMERA: ONLINE";
+          statusDot.className = "w-3 h-3 rounded-full bg-mata-green shadow-glowGreen";
+        })
+        .catch(err => {
+          console.error("Camera Access Denied or Failed:", err);
+          statusText.innerText = "KAMERA: ERROR (Guna Tetikus)";
+          statusDot.className = "w-3 h-3 rounded-full bg-mata-red";
+        });
+    }
+
+    function onHandResults(results) {
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+
+        // Draw Skeleton Lines on Canvas Overlay
+        drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00f0ff', lineWidth: 2 });
+        drawLandmarks(canvasCtx, landmarks, { color: '#00ff66', lineWidth: 1, radius: 3 });
+
+        // Index Finger Tip (Landmark 8) for Cursor Tracking
+        const indexTip = landmarks[8];
+        const thumbTip = landmarks[4];
+
+        // Mirror X Coordinate
+        const cursorX = (1 - indexTip.x) * window.innerWidth;
+        const cursorY = indexTip.y * window.innerHeight;
+
+        // Position Virtual Hand Cursor
+        handCursor.classList.remove("hidden");
+        handCursor.style.transform = `translate3d(${cursorX}px, ${cursorY}px, 0)`;
+
+        // Update Tutorial Detection HUD
+        const tutorialDetect = document.getElementById("tutorial-gesture-detect");
+        if (tutorialDetect) tutorialDetect.innerText = "HAND DETECTED";
+
+        // Gesture Detection Logic
+        processGestures(landmarks, cursorX, cursorY);
+
+      } else {
+        handCursor.classList.add("hidden");
+        const tutorialDetect = document.getElementById("tutorial-gesture-detect");
+        if (tutorialDetect) tutorialDetect.innerText = "MENUNGGU TANGAN...";
+      }
+
+      canvasCtx.restore();
+    }
+
+    function processGestures(landmarks, cursorX, cursorY) {
+      const now = Date.now();
+      const thumbTip = landmarks[4];
+      const indexTip = landmarks[8];
+      const middleTip = landmarks[12];
+      const wrist = landmarks[0];
+
+      // Distance for Pinch Detection (Thumb + Index)
+      const pinchDistance = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+      const isPinch = (pinchDistance < 0.06);
+
+      // Thumbs Up Detection (Thumb high above wrist & other fingers folded)
+      const isThumbsUp = (thumbTip.y < landmarks[3].y) && (indexTip.y > landmarks[6].y) && (middleTip.y > landmarks[10].y);
+
+      // 1. PINCH GESTURE -> Select Answer Option
+      if (isPinch && (now - lastGestureTime > GESTURE_COOLDOWN_MS)) {
+        lastGestureTime = now;
+        triggerCursorClick(cursorX, cursorY);
+        playSFX('select');
+      }
+
+      // 2. THUMBS UP GESTURE -> Next Question when Feedback Active
+      if (isThumbsUp && (now - lastGestureTime > GESTURE_COOLDOWN_MS)) {
+        const feedbackPanel = document.getElementById("feedback-panel");
+        if (feedbackPanel && !feedbackPanel.classList.contains("hidden")) {
+          lastGestureTime = now;
+          nextQuestion();
+        }
+      }
+    }
+
+    function triggerCursorClick(x, y) {
+      const targetElement = document.elementFromPoint(x, y);
+      if (targetElement) {
+        targetElement.click();
+      }
+    }
+
+    /* ================= 7. AUDIO SFX SYNTHESIZER ================= */
+    function initAudio() {
+      try {
+        window.AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+      } catch (e) {
+        console.warn("Web Audio API not supported.");
+      }
+    }
+
+    function toggleAudio() {
+      soundEnabled = !soundEnabled;
+      const icon = document.getElementById("audio-icon");
+      if (soundEnabled) {
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        icon.className = "fa-solid fa-volume-high text-mata-cyan";
+      } else {
+        icon.className = "fa-solid fa-volume-xmark text-slate-400";
+      }
+    }
+
+    function playSFX(type) {
+      if (!soundEnabled || !audioCtx) return;
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+
+      if (type === 'correct') {
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.3); // A5
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } else if (type === 'wrong') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, now); // A3
+        osc.frequency.exponentialRampToValueAtTime(110, now + 0.3); // A2
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } else if (type === 'select') {
+        osc.frequency.setValueAtTime(440, now);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+      }
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+  </script>
+</body>
+</html>
